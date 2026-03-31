@@ -1,27 +1,86 @@
 <!DOCTYPE html>
 <html>
-    <head>
-        <title>System Monitor</title>
-    </head>
-    <body>
-        <h1>Live System Stats</h1>
-        <div id="display">Waiting for data...</div>
+<head>
+    <title>System Monitor</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 20px; background: #f4f4f9; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        #status-bar { margin-bottom: 10px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>System Resource Monitor</h1>
+        <div id="status-bar">
+            Status: <span id="status-text" style="color: orange;">Connecting...</span> 
+            <span id="status-dot" style="color: orange;">●</span>
+        </div>
+        <canvas id="cpuChart"></canvas>
+    </div>
 
-        <script>
-            // Connect to the WebSocket we built in FastAPI
-            const ws = new WebSocket("ws://localhost:8000/ws");
+    <script>
+    // 1. Create simple, standard arrays for our data
+    let cpuData = [];
+    let ramData = [];
+    let timeLabels = [];
+    let systemChart;
 
-            ws.onmessage = function(event) {
-                // Parse the JSON data sent by Python
-                const data = JSON.parse(event.data);
-                
-                // Update the screen
-                const display = document.getElementById('display');
-                display.innerHTML = `
-                    <p><strong>CPU Usage:</strong> ${data.cpu}%</p>
-                    <p><strong>RAM Usage:</strong> ${data.ram}%</p>
-                `;
-            };
-        </script>
-    </body>
+    function init() {
+        const ctx = document.getElementById('cpuChart').getContext('2d');
+        
+        // 2. Point the chart directly to our arrays
+        systemChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: timeLabels,
+                datasets: [
+                    { label: 'CPU %', data: cpuData, borderColor: 'rgb(75, 192, 192)', tension: 0.2, fill: true },
+                    { label: 'RAM %', data: ramData, borderColor: 'rgb(153, 102, 255)', tension: 0.2, fill: true }
+                ]
+            },
+            options: { 
+                responsive: true, 
+                animation: false,
+                scales: { y: { beginAtZero: true, max: 100 } } 
+            }
+        });
+
+        // Small delay before connecting to ensure the chart is rendered
+        setTimeout(connectWebSocket, 500);
+    }
+
+    function connectWebSocket() {
+        const ws = new WebSocket("ws://127.0.0.1:8000/ws");
+        const statusText = document.getElementById('status-text');
+
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            const now = new Date().toLocaleTimeString();
+
+            // 3. Update our simple arrays (Not the chart object directly)
+            timeLabels.push(now);
+            cpuData.push(data.cpu);
+            ramData.push(data.ram);
+
+            // 4. Manage the "Window" (Last 20 points)
+            if (timeLabels.length > 20) {
+                timeLabels.shift();
+                cpuData.shift();
+                ramData.shift();
+            }
+
+            // 5. Tell the chart to refresh its view of our arrays
+            if (systemChart) {
+                systemChart.update('none');
+            }
+        };
+
+        ws.onopen = () => { statusText.innerText = "Connected"; statusText.style.color = "green"; };
+        ws.onclose = () => { statusText.innerText = "Disconnected"; statusText.style.color = "red"; };
+    }
+
+    window.onload = init;
+</script>
+</body>
 </html>

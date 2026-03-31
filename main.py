@@ -8,7 +8,7 @@ app = FastAPI()
 @app.get("/")
 async def get():
     # This serves the HTML file when you visit http://localhost:8000
-    with open("index.html") as f:
+    with open("index.html", "r", encoding="utf-8") as f:
         return HTMLResponse(f.read())
 
 @app.websocket("/ws")
